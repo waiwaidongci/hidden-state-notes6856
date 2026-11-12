@@ -5,7 +5,7 @@ from src.config.database import get_db
 from src.controllers.dependencies import current_user,writers
 from src.models import InferenceRun
 from src.schemas.run import RunInput
-from src.services.runs import create_run
+from src.services.runs import create_run,retry_run
 from src.utils.serialize import row
 router=APIRouter()
 @router.get('/runs')
@@ -17,3 +17,5 @@ def one(id:int,db:Session=Depends(get_db),user=Depends(current_user)):
  return row(r)
 @router.post('/runs')
 def create(data:RunInput,db:Session=Depends(get_db),user=Depends(writers)):return create_run(db,data,user.email)
+@router.post('/runs/{id}/retry')
+def retry(id:int,db:Session=Depends(get_db),user=Depends(writers)):return retry_run(db,id,user.email)

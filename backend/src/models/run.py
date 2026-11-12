@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped,mapped_column
-from sqlalchemy import ForeignKey,String,JSON,Text,DateTime
+from sqlalchemy import ForeignKey,String,JSON,Text,DateTime,Integer
 from sqlalchemy.dialects.mysql import DOUBLE
 from datetime import datetime,timezone
 from src.config.database import Base
@@ -15,5 +15,8 @@ class InferenceRun(Base):
  result:Mapped[dict|None]=mapped_column(JSON,nullable=True)
  error:Mapped[str|None]=mapped_column(Text,nullable=True)
  total_log_likelihood:Mapped[float|None]=mapped_column(DOUBLE(asdecimal=False),nullable=True)
+ # attempt_no 是当前排队/执行轮次（首轮为1，每次重试+1）；attempt_history 逐轮保留错误与重试记录
+ attempt_no:Mapped[int]=mapped_column(Integer,default=1)
+ attempt_history:Mapped[list]=mapped_column(JSON,default=list)
  created_by:Mapped[str]=mapped_column(String(120))
  created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))

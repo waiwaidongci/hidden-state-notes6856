@@ -36,8 +36,8 @@ Compose恰好frontend/backend/worker/db/redis五服务，各有健康检查。Ng
 4. “固定模型推断”默认选前20条，可清空/勾选1–30条。选模型版本后提交；任务冻结profile与所选轨迹，不更新参数。
 5. A研究20条/800码，实际总logL约−969.126197943428。首条logL约−49.50643547，线性概率以3.159572e−22等科学记数法展示，不误显示为0。
 6. 在“后验与联合路径”逐轨迹看真实状态带、每时刻后验和Viterbi联合logP；单点最高态拼接可能违反零转移，不能直接当联合MAP。
-7. 核对 `YX-33C 受限发射序列`：若新观测出现初态不可能发射的C，任务明确失败，不把数值下溢当不可能，也不把0改成小正数。
-8. 提交工况核对说明，回看设备记录和码含义。顾临批准/退回；程沅下载批准快照CSV。重复审批409，后续改轨迹不改写既有结果。
+7. 核对 `YX-33C 受限发射序列`：若新观测出现初态不可能发射的C，任务明确失败，不把数值下溢当不可能，也不把0改成小正数。失败后无需另建运行，可在“固定模型推断/后验与联合路径”页面原地重试：重试沿用首次排队冻结的模型版本与观测快照，之后修订源观测也不改变worker输入；每轮错误与重试记录逐轮保留。
+8. 提交工况核对说明，回看设备记录和码含义。顾临批准/退回；程沅下载批准快照CSV。重复审批409，后续改轨迹不改写既有结果；成功运行不可重试（接口409），其结果与工况核对说明保持不变。
 9. 在“过程留痕”核对导入、版本冻结、轨迹修订、队列、审批和导出；HTTP响应含X-Request-ID。
 
 ## 固定HMM数值口径
@@ -64,7 +64,7 @@ Viterbi在相同log空间用max替代sum，保留每个状态的最佳前缀路�
 
 Role/RunStatus/NoteStatus位于 `backend/src/constants/enums.py`，前端对应 `frontend/src/constants/enums.ts`。JWT、审计、RequestID/Error/Redis写限流三个中间件形成横切链路。按令牌摘要或无令牌IP分钟计数，默认60写请求，429含Retry-After；计数不可用503，健康GET不计。审批行锁使draft只审一次，导出取result_snapshot。
 
-每研究1–240轨迹，每条1–200码，单任务1–30条、状态≤5；重复ID、外研究轨迹/版本、未知码、非法矩阵维度、NaN/Inf/bool概率或ID、安全行和以422拒绝。任务提交时同时冻结profile与所选trace，之后修订源记录不影响worker输入或批准快照。
+每研究1–240轨迹，每条1–200码，单任务1–30条、状态≤5；重复ID、外研究轨迹/版本、未知码、非法矩阵维度、NaN/Inf/bool概率或ID、安全行和以422拒绝。任务提交时同时冻结profile与所选trace，之后修订源记录不影响worker输入或批准快照；`POST /runs/{id}/retry` 对failed运行原地开新一轮（attempt_no自增），仍读取同一冻结快照，成功运行与排队/运行中的重试请求返回409。`inference_runs.attempt_history`逐轮记录queued/retry/completed/failed、时间、错误与重试人。worker以`attempt_no`为围栏并配合`queued→running`原子条件UPDATE：多人并发重试或队列重复投递同一轮只执行一轮，旧执行迟到的成功或失败在提交前经行锁围栏判定后丢弃，不能覆盖新一轮结果。
 
 MySQL累计logL及最大归一delta列用DOUBLE(asdecimal=False)，保持Python float。当前MySQL JSON读回与DOUBLE列在累计logL约−969时可差1ULP（约1.14e−13），验收按2ULP检查，完整结果保留实际读回数值。
 
@@ -77,4 +77,4 @@ MySQL累计logL及最大归一delta列用DOUBLE(asdecimal=False)，保持Python 
 
 本地前端 `cd frontend && npm ci && npm run dev`；`npm run build`执行vue-tsc/Vite。后端安装requirements、配置DATABASE_URL/REDIS_URL/JWT_SECRET后运行uvicorn。ORM create_all初始化，migrations仅初始结构说明，不声称生产迁移链。MIT许可证见LICENSE。
 
-实际验收见批次 `test-artifacts/gb-0033/TESTING.md`，源哈希、测试脚本、JSON、CSV、真实PNG与原始.log均与源码分离。未验证外部真实设备、参数估计/EM、实时处理、生产压力或完整无障碍。令牌/IP限流不是生产抗滥用全链路，换登录令牌可获得新计数。Google字体断网回退本地字体。合成观测没有真实设备故障标签。
+实际验收见批次 `test-artifacts/gb-0033/TESTING.md`，源哈希、测试脚本、JSON、CSV、真实PNG与原始.log均与源码分离。重试围栏的回归用例在 `backend/tests/`（pytest，SQLite内存库/文件库，不依赖MySQL与Redis）：覆盖重复投递只执行一轮、跨连接并发认领、旧执行迟到成功/失败不覆盖新一轮、快照在源观测修订后仍不变、逐轮错误与重试记录保留，以及HTTP层鉴权与409语义，共26项。未验证外部真实设备、参数估计/EM、实时处理、生产压力或完整无障碍。令牌/IP限流不是生产抗滥用全链路，换登录令牌可获得新计数。Google字体断网回退本地字体。合成观测没有真实设备故障标签。
